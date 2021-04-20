@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Git LFS Locks editor</title>
+	<style>
+		body {
+			font-family: Arial, Helvetica, sans-serif;
+			font-weight: 100;
+		}
+		#username {
+			position: absolute;
+			z-index: 1000;
+			font-size: 2em;
+			text-align: center;
+			right: 0;
+			top: 0;
+			margin: 0px;;
+			padding: 10px;
+			min-width: 2em;
+			border-radius: 0 0 0 20px;
+			font-family: Arial, Helvetica, sans-serif;
+		}
+		#username:hover {
+			background: #378de5;
+			color: white;
+		}
+		a {
+			color: #378de5;
+		}
+
+		h1 {
+			font-weight: 100;
+		}
+		.shrinkAway {
+			transition:all 0.3s ease;
+			-webkit-transform: scale(0);
+			-ms-transform: scale(0);
+			transform: scale(0);
+		}
+		.row {
+			display: flex;
+			flex-direction: row;
+			margin: 15px;
+		}
+		.column1 {
+			flex: 1;
+		}
+		.column2 {
+			flex: 2;
+		}
+		.column4 {
+			flex: 4;
+		}
+		.column8 {
+			flex: 8;
+		}
+		#fileGrid {
+			/* display: flex;
+		flex-direction: row;
+		width: 100%; */
+			margin: 15px;
+		}
+
+		.fileRow {
+			display: flex;
+			flex-direction: row;
+			flex: 1;
+			text-align: center;
+			padding: 1em;
+		}
+
+		.git-owner {
+			flex: 0 0 15%;
+			overflow: hidden;
+			/* background-color: red; */
+		}
+
+		.git-path {
+			flex: 0 0 50%;
+			overflow: hidden;
+			text-align: left;
+			/* background-color: blue; */
+		}
+
+		.git-lockedAt {
+			flex: 0 0 11%;
+			overflow: hidden;
+			text-align: left;
+			/* background-color: green; */
+		}
+
+		.git-id {
+			flex: 0 0 10%;
+			overflow: hidden;
+			/* background-color: yellow; */
+		}
+		.git-unlock {
+			flex: 0 0 7%;
+			overflow: hidden;
+			/* background-color: yellow; */
+		}
+		.fancyButton {
+			-moz-box-shadow: 3px 4px 0px 0px #1564ad;
+			-webkit-box-shadow: 3px 4px 0px 0px #1564ad;
+			box-shadow: 3px 4px 0px 0px #1564ad;
+			background-color:#79bbff;
+			-moz-border-radius:5px;
+			-webkit-border-radius:5px;
+			border-radius:5px;
+			border:1px solid #337bc4;
+			display:inline-block;
+			cursor:pointer;
+			color:#ffffff;
+			font-family:Arial;
+			font-size:17px;
+			line-height: 34px;
+			font-weight:bold;
+			padding:12px 44px;
+			text-decoration:none;
+			text-shadow:0px 1px 0px #528ecc;
+			margin: 5px;
+			-webkit-user-select: none;
+		}
+		.fancyButton:hover {
+			background-color:#378de5;
+		}
+		.fancyButton:active {
+			position:relative;
+			top:1px;
+		}
+
+		#loading {
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			right: 0;
+
+			background-color: #18b6ff;
+			opacity: 0.5;
+			text-align: center;
+			font-size: 2em;
+			line-height: 100%;
+		}
+		#loadingText {
+			color: white;
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			width: 50%;
+			height: 10%;
+			margin: auto;
+		}
+		.noselect {
+			-webkit-user-select: none;
+		}
+		#dragme {
+			-webkit-user-select: none;
+			/* -webkit-app-region: drag; */
+		}
+		a.disabled {
+			pointer-events: none;
+			cursor: default;
+			text-decoration: none;
+			color: gray;
+		}
+	</style>
+</head>
+
+<body>
+	<input type="text" placeholder="Git username" id="username" class="noselect" onchange="changeUsername()">No Username</input>
+	<div id="noselect" class="row">
+		<h1 class="column1 noselect">Git LFS Locks editor</h1>
+	</div>
+	<div id="loading" style="display: none;">
+		<div id="loadingText" class="noselect">Loading</div>
+	</div>
+	<div class="row">
+		<h3 id="folderIndicator" class="column8">No folder selected</h3>
+		<a id="refresh" class="fancyButton column1" onclick="refreshDirectory()">Refresh</a>
+		<a id="selectFolderButton" class="fancyButton column2" onclick="selectDirectory()">Select a Folder</a>
+	</div>
+	<div id="fileGrid">
+		<div class="fileRow">
+			<div class="noselect git-owner"><b>Owner</b></div>
+			<div class="noselect git-path"><b>Path</b></div>
+			<div class="noselect git-lockedAt"><b>Locked At</b></div>
+			<div class="noselect git-id"><b>Id</b></div>
+			<div class="noselect git-unlock"><b>Unlock</b></div>
+			<div class="noselect git-unlock"><b>Force Unlock</b></div>
+		</div>
+	</div>
+	<script type="text/javascript" charset="utf-8">
+		const { ipcRenderer } = require('electron')
+		let localGitUser = localStorage.getItem('localGitUser')
+		if(localGitUser) {
+			document.getElementById('username').value = localGitUser
+		}
+		function askShutdown() {
+			if(confirm('Exit?')){
+				ipcRenderer.send('shutdown')
+			}
+		}
+		onkeydown = function (e) {
+			if(e.which === 27) {
+				askShutdown()
+			}
+		}
+
+		function changeUsername(edit) {
+			localGitUser = document.getElementById('username').value
+			localStorage.setItem('localGitUser', localGitUser)
+		}
+		function refreshDirectory(event) {
+			document.getElementById('loading').style.display = ''
+			let deletThese = document.getElementsByClassName('deleteOnRefresh')
+			while(deletThese[0]) {
+				deletThese[0].parentNode.removeChild(deletThese[0])
+			}
+			ipcRenderer.send('selectedDirectory', currentFolder)
+		}
+		function selectDirectory(event) {
+			console.log('folderSelected')
+			ipcRenderer.send('selectDirectory')
+			document.getElementById('loading').style.display = ''
+		}
+		function setDragStart(element) {
+			element.ondragstart = (event) => {
+				event.preventDefault()
+				ipcRenderer.send('ondragstart', element.getAttribute('path'))
+			}
+			element.onclick = (event) => {
+				ipcRenderer.send('openfile', element.getAttribute('path'))
+			}
+		}
+		let currentFolder = localStorage.getItem('selected-folder')
+		if (currentFolder) {
+			refreshDirectory()
+		}
+		ipcRenderer.on('file-unlocked', function (event, lockId) {
+			let doc = document.getElementById('gitId' + lockId)
+			if(doc) {
+				doc.classList.add('shrinkAway')
+				setTimeout(() => {
+					doc.parentNode.removeChild(doc)
+				}, 300)
+			}
+		})
+		ipcRenderer.on('folderSelected', function (event, folder) {
+			currentFolder = folder
+			let deletThese = document.getElementsByClassName('deleteOnRefresh')
+			while(deletThese[0]) {
+				deletThese[0].parentNode.removeChild(deletThese[0])
+			}
+			if(!folder) {	
+				document.getElementById('folderIndicator').innerHTML = 'No folder selected'
+				document.getElementById('selectFolderButton').innerHTML = 'Select a Folder'
+			} else {
+				document.getElementById('folderIndicator').innerHTML = '<span class="noselect">Folder: </span>' + folder
+				document.getElementById('selectFolderButton').innerHTML = 'Change Folder'
+			}
+			localStorage.setItem('selected-folder', folder)
+		})
+		ipcRenderer.on('log', (event, data) => {
+			console.log(...data)
+		})
+		ipcRenderer.on('error', (event, data) => {
+			console.error(...data)
+		})
+
+		ipcRenderer.on('git-data-failed', function (event, gitData) {
+			document.getElementById('loading').style.display = 'none'
+		})
+		const fileGrid = document.getElementById('fileGrid')
+		ipcRenderer.on('git-data', function (event, gitData) {
+			gitData.forEach(file => {
+				const fileRow = document.createElement('div')
+				fileRow.id = 'gitId' + file.id
+				fileRow.classList.add('fileRow')
+				fileRow.classList.add('deleteOnRefresh')
+
+				const gitOwner = document.createElement('div')
+				gitOwner.classList.add('git-owner')
+				gitOwner.innerHTML = (file.owner || {}).name
+				fileRow.appendChild(gitOwner)
+
+				const gitPath = document.createElement('div')
+				gitPath.classList.add('git-path')
+				const gitPathLink = document.createElement('a')
+				gitPathLink.classList.add('draggable')
+				gitPathLink.setAttribute('path', file.path)
+				gitPathLink.innerHTML = (file.path || '').replace(currentFolder, '.') // file.path.length > 50 ? '...' + file.path.slice(-50) : file.path
+				gitPathLink.href = '#'
+				setDragStart(gitPathLink)
+				gitPath.appendChild(gitPathLink)
+				fileRow.appendChild(gitPath)
+
+				const gitLockedAt = document.createElement('div')
+				gitLockedAt.classList.add('git-lockedAt')
+				gitLockedAt.innerHTML = file.locked_at
+				fileRow.appendChild(gitLockedAt)
+
+				const gitId = document.createElement('div')
+				gitId.classList.add('git-id')
+				gitId.innerHTML = file.id
+				fileRow.appendChild(gitId)
+				
+
+
+				const gitUnlock = document.createElement('div')
+				gitUnlock.classList.add('git-unlock')
+				const gitUnlockLink = document.createElement('a')
+				// gitUnlockLink.classList.add('draggable')
+				gitUnlockLink.setAttribute('path', file.path)
+				gitUnlockLink.setAttribute('gitId', file.id)
+				gitUnlockLink.href = '#'
+
+				if(gitOwner.innerHTML === localGitUser){
+					gitUnlockLink.innerHTML = 'Unlock'
+					gitUnlockLink.onclick = function() {
+						ipcRenderer.send('unlock', gitUnlockLink.getAttribute('gitId'))
+						return false
+					}
+				} else {
+					gitUnlockLink.innerHTML = 'X'
+					gitUnlockLink.onclick = function() {
+						return false
+					}
+					gitUnlockLink.classList.add('disabled')
+				}
+				const gitForceUnlock = document.createElement('div')
+				gitForceUnlock.classList.add('git-unlock')
+				const gitForceUnlockLink = document.createElement('a')
+				// gitForceUnlockLink.classList.add('draggable')
+				gitForceUnlockLink.setAttribute('path', file.path)
+				gitForceUnlockLink.setAttribute('gitId', file.id)
+				gitForceUnlockLink.href = '#'
+
+				gitForceUnlockLink.innerHTML = 'Force Unlock'
+				gitForceUnlockLink.onclick = function() {
+					if(confirm('Are you sure you want to force-unlock the file ' + gitForceUnlockLink.getAttribute('path') + '?')){
+						ipcRenderer.send('forceUnlock', gitForceUnlockLink.getAttribute('gitId'))
+						return false
+					}
+					return false
+				}
+				
+				gitUnlock.appendChild(gitUnlockLink)
+				gitForceUnlock.appendChild(gitForceUnlockLink)
+				fileRow.appendChild(gitUnlock)
+				fileRow.appendChild(gitForceUnlock)
+				
+				fileGrid.appendChild(fileRow)
+			})
+			document.getElementById('loading').style.display = 'none'
+		});
+		let draggables = document.getElementsByClassName('draggable')
+		Array.prototype.forEach.call(draggables, function (draggable) {
+			setDragStart(draggable)
+		})
+	</script>
+</body>
+
+</html>

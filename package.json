@@ -1,0 +1,36 @@
+{
+	"name": "git-lfs-locks-editor",
+	"version": "1.0.0",
+	"description": "Gui editor Git LFS file locks",
+	"main": "main.js",
+	"scripts": {
+		"start": "electron .",
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"pack": "electron-builder --dir",
+		"dist": "electron-builder",
+		"distMac": "electron-builder -m",
+		"distWindows": "electron-builder -w",
+		"distLinux": "electron-builder -l",
+		"distAll": "electron-builder -mwl",
+		"postinstall": "electron-builder install-app-deps"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/stephan-nordnes-eriksen/git-lfs-locks-editor.git"
+	},
+	"author": "Stephan Nordnes Eriksen",
+	"license": "MIT",
+	"devDependencies": {
+		"electron": "^6.0.3",
+		"electron-builder": "^22.2.0"
+	},
+	"build": {
+		"appId": "com.snes.git-lfs-locks-editor",
+		"mac": {
+			"category": "git"
+		}
+	},
+	"dependencies": {
+		"fix-path": "^2.1.0"
+	}
+}
